@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Admin Panel</h1>
+
+    <!-- Client-side validation ONLY (Vulnerable) -->
+    <script>
+        const price = {{ product.price }};
+        console.log("Current Price:", price);
+    </script>
+
+    <h3>Product: {{ product.name }}</h3>
+    <h3>Current Price: {{ product.price }}$</h3>
+
+    <!-- Form is CSRF vulnerable -->
+    <form method="POST" action="/update_price">
+        <label>New Price:</label>
+        <input name="price" type="number">
+        <button type="submit">Update Price</button>
+    </form>
+</body>
+</html>

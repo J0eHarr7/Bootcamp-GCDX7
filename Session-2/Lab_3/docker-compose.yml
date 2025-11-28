@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  csrf-lab:
+    build: .
+    ports:
+      - "5004:5004"
+    container_name: csrf_lab
+    restart: unless-stopped

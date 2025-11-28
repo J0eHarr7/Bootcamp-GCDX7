@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSTI CTF Lab :: Injection Protocol</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #00ff41;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        repeating-linear-gradient(
+          0deg,
+          rgba(0, 255, 65, 0.03) 0px,
+          transparent 1px,
+          transparent 2px,
+          rgba(0, 255, 65, 0.03) 3px
+        );
+      pointer-events: none;
+      animation: scan 8s linear infinite;
+    }
+
+    @keyframes scan {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(100%); }
+    }
+
+    .container {
+      background: rgba(10, 10, 10, 0.9);
+      border: 2px solid #00ff41;
+      border-radius: 10px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 
+        0 0 20px rgba(0, 255, 65, 0.3),
+        inset 0 0 40px rgba(0, 255, 65, 0.05);
+      position: relative;
+      animation: glowPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 65, 0.3), inset 0 0 40px rgba(0, 255, 65, 0.05); }
+      50% { box-shadow: 0 0 30px rgba(0, 255, 65, 0.5), inset 0 0 40px rgba(0, 255, 65, 0.1); }
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #00ff41;
+    }
+
+    h1 {
+      font-size: 2em;
+      text-shadow: 0 0 10px #00ff41;
+      margin-bottom: 10px;
+      letter-spacing: 3px;
+    }
+
+    .subtitle {
+      color: #00cc33;
+      font-size: 0.9em;
+      letter-spacing: 2px;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: rgba(0, 255, 65, 0.05);
+      border-left: 3px solid #00ff41;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-led {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ff41;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    form {
+      margin: 30px 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 0.95em;
+      color: #00ff41;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    input {
+      width: 100%;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid #00ff41;
+      border-radius: 5px;
+      color: #00ff41;
+      font-family: 'Courier New', monospace;
+      font-size: 1em;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    input::placeholder {
+      color: rgba(0, 255, 65, 0.4);
+    }
+
+    input:focus {
+      box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
+      border-color: #00ff88;
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      margin-top: 20px;
+      background: linear-gradient(135deg, #00ff41 0%, #00cc33 100%);
+      border: none;
+      border-radius: 5px;
+      color: #0a0a0a;
+      font-family: 'Courier New', monospace;
+      font-size: 1em;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    button:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(0, 255, 65, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        #00ff41 50%, 
+        transparent 100%);
+      margin: 30px 0;
+    }
+
+    .info {
+      background: rgba(0, 255, 65, 0.05);
+      border: 1px solid rgba(0, 255, 65, 0.3);
+      border-radius: 5px;
+      padding: 15px;
+      font-size: 0.9em;
+      line-height: 1.6;
+    }
+
+    .info-title {
+      color: #00ff88;
+      font-weight: bold;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon {
+      font-size: 1.2em;
+    }
+
+    .terminal-prompt {
+      color: #00cc33;
+      margin-right: 5px;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+      
+      h1 {
+        font-size: 1.5em;
+      }
+      
+      .status {
+        flex-direction: column;
+        gap: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚡ SSTI CTF LAB ⚡</h1>
+      <div class="subtitle">SERVER SIDE TEMPLATE INJECTION</div>
+    </div>
+
+    <div class="status">
+      <div class="status-item">
+        <div class="status-led"></div>
+        <span>SYSTEM ACTIVE</span>
+      </div>
+      <div class="status-item">
+        <span>TARGET: VULNERABLE</span>
+      </div>
+    </div>
+
+    <form action="/greet" method="get">
+      <label>
+        <span class="terminal-prompt">root@ssti:~$</span> INJECTION VECTOR
+      </label>
+      <input 
+        name="name" 
+        placeholder="{{7*7}} or ${7*7} or <%= 7*7 %>"
+        autocomplete="off"
+      >
+      <button type="submit">
+        <span style="position: relative; z-index: 1;">► EXECUTE PAYLOAD</span>
+      </button>
+    </form>
+
+    <form action="/safe-greet" method="get">
+      <label>
+        <span class="terminal-prompt">root@ssti:~$</span> INJECTION VECTOR
+      </label>
+      <input 
+        name="name" 
+        placeholder="{{7*7}} or ${7*7} or <%= 7*7 %>"
+        autocomplete="off"
+      >
+      <button type="submit">
+        <span style="position: relative; z-index: 1;">► EXECUTE PAYLOAD</span>
+      </button>
+    </form>
+
+    <div class="divider"></div>
+
+    <div class="info">
+      <div class="info-title">
+        <span class="icon">🛡️</span>
+        SECURITY NOTICE
+      </div>
+      <p>
+        This environment includes both <strong>safe-greet</strong> (sanitized) and vulnerable endpoints for comparison. Test various template expressions to identify injection vectors.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
