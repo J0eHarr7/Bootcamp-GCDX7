@@ -39,11 +39,6 @@ def admin():
 
 @app.route("/update_price", methods=["POST"])
 def update_price():
-    # VULNERABLE:
-    #  - No CSRF token
-    #  - Accepts any POST from any origin
-    #  - No SameSite cookie protection
-
     session_user = request.cookies.get("session_user")
     if session_user != "admin":
         return "Unauthorized"

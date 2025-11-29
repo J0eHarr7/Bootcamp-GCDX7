@@ -7,15 +7,10 @@ const FLAG = "GCDXN7{matb9ach_t7t_les_var_fles_template_abatal}";
 function renderGreeting() {
     const userInput = document.getElementById("username").value;
 
-    // ❌ Vulnerable:
-    // User input is treated as a Mustache template
     const template = "Hello " + userInput;
 
     try {
-        const output = Mustache.render(template, {
-            flag: FLAG,
-            secret: "Top-secret message"
-        });
+        const output = Mustache.render(template);
 
         document.getElementById("output").innerHTML = output;
 
