@@ -1,0 +1,19 @@
+<!doctype html>
+<title>Reset Storm - Lab</title>
+<h1>Reset Storm Lab</h1>
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul>
+    {% for m in messages %}
+      <li>{{ m }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+<nav>
+  <a href="{{ url_for('login') }}">Login</a> |
+  <a href="{{ url_for('reset_password') }}">Reset password</a> |
+  <a href="{{ url_for('debug_get_admin_token') }}">(debug token)</a> |
+  <a href="{{ url_for('admin') }}">Admin</a>
+</nav>
+<p>Try to get admin and read the flag.</p>

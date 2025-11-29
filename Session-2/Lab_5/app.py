@@ -1,106 +1,105 @@
 # app.py
-# RaceBank - intentionally vulnerable for CTF/education
-# Run: python app.py
-from flask import Flask, request, jsonify, g
-import sqlite3
+from flask import Flask, request, redirect, url_for, render_template, session, flash
+import json
 import os
 import time
-import threading
+from werkzeug.security import generate_password_hash, check_password_hash
 
-DB = "racebank.db"
-FLAG = "CTF{race_condition_mastered}"  # place the flag here for demonstration
+USERS_FILE = "users.json"
 
 app = Flask(__name__)
+app.secret_key = "ctf-lab-super-secret"  # fine for lab only
 
-def get_db():
-    if 'db' not in g:
-        conn = sqlite3.connect(DB, check_same_thread=False)
-        conn.isolation_level = None  # autocommit mode; we'll simulate poor transaction handling
-        g.db = conn
-    return g.db
+def read_users():
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
 
-@app.teardown_appcontext
-def close_db(exc):
-    db = g.pop('db', None)
-    if db:
-        db.close()
+def write_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f, indent=2)
 
-def init_db():
-    if os.path.exists(DB):
-        os.remove(DB)
-    conn = sqlite3.connect(DB, check_same_thread=False)
-    c = conn.cursor()
-    c.execute('CREATE TABLE accounts(id INTEGER PRIMARY KEY, name TEXT, balance INTEGER);')
-    # Create a single account with small balance
-    c.execute("INSERT INTO accounts(name, balance) VALUES (?, ?);", ("victim", 100))
-    # Create a flag table to be revealed only if inconsistency occurs
-    c.execute('CREATE TABLE flag(secret TEXT, revealed INTEGER DEFAULT 0);')
-    c.execute('INSERT INTO flag(secret, revealed) VALUES (?, 0);', (FLAG,))
-    conn.commit()
-    conn.close()
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-@app.route('/balance', methods=['GET'])
-def balance():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT balance FROM accounts WHERE name = ?;", ("victim",))
-    r = cur.fetchone()
-    return jsonify({"balance": r[0]})
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        passwd = request.form["password"]
+        users = read_users()
+        u = users.get(username)
+        if u and check_password_hash(u["password_hash"], passwd):
+            session["username"] = username
+            flash("Logged in")
+            return redirect(url_for("index"))
+        flash("Bad credentials")
+    return render_template("login.html")
 
-@app.route('/withdraw', methods=['POST'])
-def withdraw():
-    """
-    Vulnerable withdraw endpoint:
-    1) read balance
-    2) if balance >= amount: proceed to subtract and update
-    This is deliberately non-atomic, simulating check-then-act race.
-    """
-    data = request.get_json() or {}
-    amount = int(data.get("amount", 0))
-    db = get_db()
-    cur = db.cursor()
+@app.route("/logout")
+def logout():
+    session.pop("username", None)
+    flash("Logged out")
+    return redirect(url_for("index"))
 
-    # Simulate non-atomic check-then-act with deliberate sleep to widen race window
-    cur.execute("SELECT balance FROM accounts WHERE name = ?;", ("victim",))
-    row = cur.fetchone()
-    if row is None:
-        return jsonify({"error": "account not found"}), 404
+@app.route("/admin")
+def admin():
+    if session.get("username") != "admin":
+        flash("Admins only")
+        return redirect(url_for("index"))
+    users = read_users()
+    flag = users["admin"].get("flag", "no-flag")
+    return render_template("admin.html", flag=flag)
 
-    balance = row[0]
-    # Artificial delay to increase chance of race
-    time.sleep(0.1)
+# --- debug endpoint (exposes token) ---
+# Intentionally included for CTF discovery. In real apps this wouldn't exist.
+@app.route("/debug/get_admin_token")
+def debug_get_admin_token():
+    users = read_users()
+    token = users["admin"].get("reset_token", "")
+    return f"Admin reset token (lab-only): {token}\n"
 
-    if balance < amount:
-        return jsonify({"status": "failed", "reason": "insufficient funds", "balance": balance}), 400
+# Vulnerable reset endpoint (check-then-write without locking)
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    if request.method == "POST":
+        username = request.form["username"]
+        token = request.form["token"]
+        new_password = request.form["new_password"]
 
-    # Subtract and update (non-atomic due to sleep + autocommit)
-    new_balance = balance - amount
-    cur.execute("UPDATE accounts SET balance = ? WHERE name = ?;", (new_balance, "victim"))
+        users = read_users()
+        user = users.get(username)
+        # check token
+        if not user or user.get("reset_token") != token:
+            flash("Invalid token or user")
+            return redirect(url_for("reset_password"))
+        
+        # introduce a deliberate race window
+        time.sleep(0.5)
 
-    # Check for inconsistent state: if total withdrawn > original deposit, reveal flag
-    # (This simulates a CTF condition — flag revealed only if balance goes negative or other odd state)
-    cur.execute("SELECT balance FROM accounts WHERE name = ?;", ("victim",))
-    after = cur.fetchone()[0]
-    if after < 0:
-        # reveal flag
-        cur.execute("UPDATE flag SET revealed = 1 WHERE rowid = 1;")
-        db.commit()
-        return jsonify({"status": "ok", "balance": after, "flag": FLAG})
+        # now write new password and remove token
+        user["password_hash"] = generate_password_hash(new_password)
+        user["reset_token"] = None
+        write_users(users)
 
-    db.commit()
-    return jsonify({"status": "ok", "balance": new_balance})
+        flash("Password reset (if token valid)")
+        return redirect(url_for("login"))
 
-@app.route('/get-flag', methods=['GET'])
-def get_flag():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT revealed, secret FROM flag LIMIT 1;")
-    row = cur.fetchone()
-    if row and row[0] == 1:
-        return jsonify({"flag": row[1]})
-    return jsonify({"flag": None, "msg": "flag not revealed"})
+    return render_template("reset.html")
 
-init_db()
 if __name__ == "__main__":
-    # NOTE: debug=True and threaded=True to allow concurrent requests for the lab
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    # create users.json if missing
+    if not os.path.exists(USERS_FILE):
+        users = {
+            "admin": {
+                "password_hash": generate_password_hash("admin123"),
+                "reset_token": "ADMIN-RESET-TOKEN-12345",
+                "flag": "GCDXN7{race_condition_am3lm_sor3a_dakchi}"
+            },
+            "alice": {
+                "password_hash": generate_password_hash("alicepw"),
+                "reset_token": None
+            }
+        }
+        write_users(users)
+    app.run(host="0.0.0.0", port=5000, debug=False)
