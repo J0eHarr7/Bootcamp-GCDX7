@@ -60,7 +60,7 @@ def internal_flag():
         return "Access Denied: Local requests only.", 403
 
     with open("flags/flag.txt", "r") as f:
-        return "sir 9lb 3la tri9 khra abatal"
+        return f.read()
 
 
 # ------------------------------------------------------
